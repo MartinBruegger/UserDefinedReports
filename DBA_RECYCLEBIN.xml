@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<displays>
+<display id="bafb9489-017f-1000-8003-ac10051873c1" type="" style="Table" enable="true">
+	<name><![CDATA[DBA_RECYCLEBIN - list and generate commands]]></name>
+	<description><![CDATA[]]></description>
+	<tooltip><![CDATA[Show dropped objects grouped by BASE_OBJECT, generate commands to FLASHBACK and RENAME]]></tooltip>
+	<drillclass><![CDATA[]]></drillclass>
+	<CustomValues>
+		<TYPE><![CDATA[horizontal]]></TYPE>
+	</CustomValues>
+	<query>
+		<sql><![CDATA[select * from DBA_RECYCLEBIN 
+    order by owner asc, substr(original_name,instr(original_name,'_')) asc, createtime asc,
+           decode(type,'TABLE','A','Table Partition','B','INDEX','C','Index Partition','D','TRIGGER','E',type) asc]]></sql>
+	</query>
+	<display id="" type="" style="Table" enable="true">
+		<name><![CDATA[Related Objects (same BASE_OBJECT)]]></name>
+		<description><![CDATA[]]></description>
+		<tooltip><![CDATA[]]></tooltip>
+		<drillclass><![CDATA[]]></drillclass>
+		<CustomValues>
+			<TYPE><![CDATA[horizontal]]></TYPE>
+		</CustomValues>
+		<query>
+			<sql><![CDATA[select * from DBA_RECYCLEBIN where base_object = :BASE_OBJECT 
+    order by decode(type,'TABLE','A','Table Partition','B','INDEX','C','Index Partition','D','TRIGGER','E',type) asc]]></sql>
+			<binds>
+				<bind id="BASE_OBJECT">
+					<prompt><![CDATA[BASE_OBJECT]]></prompt>
+					<tooltip><![CDATA[BASE_OBJECT]]></tooltip>
+					<value><![CDATA[NULL_VALUE]]></value>
+					<bracket><![CDATA[null]]></bracket>
+				</bind>
+			</binds>
+		</query>
+	</display>
+	<display id="" type="" style="Script" enable="true">
+		<name><![CDATA[Commands to FLASHBACK and RENAME]]></name>
+		<description><![CDATA[]]></description>
+		<tooltip><![CDATA[]]></tooltip>
+		<drillclass><![CDATA[]]></drillclass>
+		<CustomValues>
+		</CustomValues>
+		<query>
+			<sql><![CDATA[set serveroutput on
+set feed off
+set lines 200
+declare
+	sql_statement varchar2(1000);
+begin
+    dbms_output.put_line('--- Use the following commands to restore the dropped objects related to the selected BASE_OBJECT.' );
+    dbms_output.put_line('--- You might choose a different name (when the object already exisits).');
+    dbms_output.put_line(' ');
+	for SS in (select distinct owner, object_name, original_name, type from DBA_RECYCLEBIN where base_object = :BASE_OBJECT 
+                  and type not in ('Table Partition','Index Partition')
+                  order by decode(type,'TABLE','A','INDEX','C','TRIGGER','E',type) asc ) loop
+        if ss.type = 'TABLE' then
+            sql_statement := 'FLASHBACK  TABLE '||ss.owner||'."'||ss.object_name||'" TO BEFORE DROP RENAME TO '||ss.original_name ;
+        else
+            sql_statement := 'ALTER '||lpad(ss.type,10,' ')||' '||ss.owner||'."'||ss.object_name||'"                RENAME TO '||ss.original_name ;
+        end if;
+		dbms_output.put_line(sql_statement||' ;');
+	end loop;
+    dbms_output.put_line(' ');
+    dbms_output.put_line('--- A Note to CONSTRAINTS: when dropping a table, the constraints are renamed to BIN$*. A FLASHBACK TABLE does not rename the constraints back to the original name.');
+end ;]]></sql>
+			<binds>
+				<bind id="BASE_OBJECT">
+					<prompt><![CDATA[BASE_OBJECT]]></prompt>
+					<tooltip><![CDATA[BASE_OBJECT]]></tooltip>
+					<value><![CDATA[NULL_VALUE]]></value>
+					<bracket><![CDATA[null]]></bracket>
+				</bind>
+			</binds>
+		</query>
+	</display>
+</display>
+</displays>

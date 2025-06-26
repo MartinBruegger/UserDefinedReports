@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<displays>
+<display id="cfd4783d-014e-1000-8001-c0a802671785" type="" style="plsql-dbms_output" enable="true">
+	<name><![CDATA[Log Switch Heat Map]]></name>
+	<description><![CDATA[]]></description>
+	<tooltip><![CDATA[]]></tooltip>
+	<drillclass><![CDATA[]]></drillclass>
+	<CustomValues>
+	</CustomValues>
+	<query>
+		<sql><![CDATA[--set serveroutput on
+--set feed off
+--- +============================================================================================================================================+
+-- | DBMS_STATS_Report_Collection.sql
+-- +============================================================================================================================================+
+-- | Author: Martin Bruegger, Switzerland
+-- | Name: 	 Martin Bruegger
+-- | E-Mail: martin.bruegger@gmail.com
+-- +--------------------------------------------------------------------------------------------------------------------------------------------+
+-- | Description:
+-- | Archived Log Heat Map - inspired by David Mann (http://ba6.us)
+-- | Migrated to true HTML/CSS and fixed Color-Codes
+-- +--------------------------------------------------------------------------------------------------------------------------------------------+
+-- |
+-- | Change History:
+-- +-----------+------------+------------+------------------------------------------------------------------------------------------------------+
+-- | Event     | Datum      | Autor      | Kommentar
+-- +===========+============+============+======================================================================================================+
+-- | created   | 2024/01/09 | mbruegger  | created 
+-- | modified  | 2025/01/15 | mbruegger  | 2.0.0 - HTML CSS fixes (title, footer added, https://validator.w3.org/nu/#file validated)
+-- +-----------+------------+------------+------------------------------------------------------------------------------------------------------+
+
+DECLARE
+    l_MyTrackInfo   VARCHAR2(100) := 'Log-Switch_Heat_Map.sql, Version 2.0.0' ;
+  -- How many days of log history to show?
+    l_Hist CONSTANT NUMBER := 31;
+  ----------------------------------------
+    l_Max           NUMBER;
+    l_DBName        v$database.name%type;
+    l_HostName      v$instance.host_name%type;
+    l_Date			VARCHAR2(40);
+
+  FUNCTION DataCell ( P_Value NUMBER, P_Max NUMBER) RETURN VARCHAR2 IS
+    l_Percent   NUMBER;
+    l_Return    VARCHAR2(50);
+  BEGIN
+    l_Percent := 10 * P_Value / P_Max ;
+    l_Return :=
+    CASE  
+        WHEN l_Percent = 0 THEN '<TD></TD>'
+        WHEN l_Percent < 1 THEN '<TD CLASS="TdGb01">'||P_Value||'</TD>'
+        WHEN l_Percent < 2 THEN '<TD CLASS="TdGb02">'||P_Value||'</TD>'
+        WHEN l_Percent < 3 THEN '<TD CLASS="TdGb03">'||P_Value||'</TD>'
+        WHEN l_Percent < 4 THEN '<TD CLASS="TdGb04">'||P_Value||'</TD>'
+        WHEN l_Percent < 5 THEN '<TD CLASS="TdGb05">'||P_Value||'</TD>'
+        WHEN l_Percent < 6 THEN '<TD CLASS="TdGb06">'||P_Value||'</TD>'
+        WHEN l_Percent < 7 THEN '<TD CLASS="TdGb07">'||P_Value||'</TD>'
+        WHEN l_Percent < 8 THEN '<TD CLASS="TdGb08">'||P_Value||'</TD>'
+        WHEN l_Percent < 9 THEN '<TD CLASS="TdGb09">'||P_Value||'</TD>'
+        ELSE                    '<TD CLASS="TdGb10">'||P_Value||'</TD>'
+    END;
+        
+    RETURN l_Return;
+  END DataCell;
+
+BEGIN
+
+    DBMS_OUTPUT.ENABLE(100000);
+
+    SELECT ROUND(MAX(COUNT(*)))
+        INTO l_Max FROM v$log_history 
+        WHERE trunc(FIRST_TIME) >= trunc(sysdate - l_Hist)
+        GROUP BY TO_CHAR(first_time,'YYYY/MM/DD HH24');
+  
+    SELECT UPPER(SYS_CONTEXT('USERENV','DB_NAME')), TO_CHAR(SYSDATE,'DL, HH24:MI'),   I.HOST_NAME 
+		INTO l_dbname, l_date,  l_hostname FROM V$INSTANCE I ;
+  
+  
+    DBMS_OUTPUT.PUT_LINE('<!DOCTYPE html>');
+    DBMS_OUTPUT.PUT_LINE('<HTML lang="en">');
+    DBMS_OUTPUT.PUT_LINE('<HEAD>');
+    DBMS_OUTPUT.PUT_LINE('<meta charset="utf-8">');
+    DBMS_OUTPUT.PUT_LINE('<title>Archived Log Heat Map '|| l_DBName ||'@'|| l_HostName || '</title>');
+    DBMS_OUTPUT.PUT_LINE('<STYLE>');
+    DBMS_OUTPUT.PUT_LINE('body        { background-color: #2E2E2E }');
+    DBMS_OUTPUT.PUT_LINE('h1, th, tr  { color: #F2F2F2; font-family: arial; font-weight: 100;  }');
+    DBMS_OUTPUT.PUT_LINE('td          { background-color: #404040; width: 30; }');
+    DBMS_OUTPUT.PUT_LINE('p           { color: #CCCCCC; font-style: italic; font-size: 0.95em;}');
+    DBMS_OUTPUT.PUT_LINE('.ThRight    { text-align: right; }');
+    DBMS_OUTPUT.PUT_LINE('.TdGb01     { color: #7e66e5; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb02     { color: #678ffe; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb03     { color: #67afcb; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb04     { color: #66B032; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb05     { color: #B2D732; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb06     { color: #FEFE33; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb07     { color: #FCCC1A; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb08     { color: #FB9902; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb09     { color: #FC600A; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGb10     { color: #FE2712; text-align: right;}');
+    DBMS_OUTPUT.PUT_LINE('.TdGbOff    { background-color: #2E2E2E; }');
+    DBMS_OUTPUT.PUT_LINE('.ThHigh     { padding: 15 0; }');
+    DBMS_OUTPUT.PUT_LINE('</STYLE>');
+    DBMS_OUTPUT.PUT_LINE('</HEAD>');
+    DBMS_OUTPUT.PUT_LINE('<BODY>');
+    DBMS_OUTPUT.PUT_LINE('<H1>Archived Log Heat Map - '||l_dbname||'@'|| l_HostName ||'  - Past 31 days</H1>');
+    DBMS_OUTPUT.PUT_LINE('<TABLE>');
+    DBMS_OUTPUT.PUT_LINE('<TR>');
+    DBMS_OUTPUT.PUT_LINE('<TH>Date / Hour</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>0</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>1</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>2</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>3</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>4</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>5</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>6</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>7</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>8</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>9</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>10</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>11</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>12</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>13</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>14</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>15</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>16</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>17</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>18</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>19</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>20</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>21</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>22</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TH>23</TH>');
+    DBMS_OUTPUT.PUT_LINE('</TR>');
+
+    FOR cur IN (
+        select trunc(first_time) AS Day,
+        sum(DECODE(to_char(first_time, 'HH24'), '00', 1, 0)) AS "00",
+        sum(DECODE(to_char(first_time, 'HH24'), '01', 1, 0)) AS "01",
+        sum(DECODE(to_char(first_time, 'HH24'), '02', 1, 0)) AS "02",
+        sum(DECODE(to_char(first_time, 'HH24'), '03', 1, 0)) AS "03",
+        sum(DECODE(to_char(first_time, 'HH24'), '04', 1, 0)) AS "04",
+        sum(DECODE(to_char(first_time, 'HH24'), '05', 1, 0)) AS "05",
+        sum(DECODE(to_char(first_time, 'HH24'), '06', 1, 0)) AS "06",
+        sum(DECODE(to_char(first_time, 'HH24'), '07', 1, 0)) AS "07",
+        sum(DECODE(to_char(first_time, 'HH24'), '08', 1, 0)) AS "08",
+        sum(DECODE(to_char(first_time, 'HH24'), '09', 1, 0)) AS "09",
+        sum(DECODE(to_char(first_time, 'HH24'), '10', 1, 0)) AS "10",
+        sum(DECODE(to_char(first_time, 'HH24'), '11', 1, 0)) AS "11",
+        sum(DECODE(to_char(first_time, 'HH24'), '12', 1, 0)) AS "12",
+        sum(DECODE(to_char(first_time, 'HH24'), '13', 1, 0)) AS "13",
+        sum(DECODE(to_char(first_time, 'HH24'), '14', 1, 0)) AS "14",
+        sum(DECODE(to_char(first_time, 'HH24'), '15', 1, 0)) AS "15",
+        sum(DECODE(to_char(first_time, 'HH24'), '16', 1, 0)) AS "16",
+        sum(DECODE(to_char(first_time, 'HH24'), '17', 1, 0)) AS "17",
+        sum(DECODE(to_char(first_time, 'HH24'), '18', 1, 0)) AS "18",
+        sum(DECODE(to_char(first_time, 'HH24'), '19', 1, 0)) AS "19",
+        sum(DECODE(to_char(first_time, 'HH24'), '20', 1, 0)) AS "20",
+        sum(DECODE(to_char(first_time, 'HH24'), '21', 1, 0)) AS "21",
+        sum(DECODE(to_char(first_time, 'HH24'), '22', 1, 0)) AS "22",
+        sum(DECODE(to_char(first_time, 'HH24'), '23', 1, 0)) AS "23"
+        FROM v$log_history
+        WHERE trunc(FIRST_TIME) >= trunc(sysdate - l_Hist)
+        GROUP BY trunc(first_time)
+        ORDER BY TRUNC(FIRST_TIME) DESC
+    ) LOOP
+        DBMS_OUTPUT.PUT_LINE('<TR>');
+        DBMS_OUTPUT.PUT_LINE('<TH class="ThRight">'||TO_CHAR(cur.Day,'Dy, YYYY/MM/DD')||'</TH>');
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."00", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."01", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."02", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."03", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."04", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."05", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."06", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."07", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."08", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."09", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."10", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."11", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."12", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."13", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."14", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."15", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."16", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."17", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."18", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."19", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."20", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."21", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."22", l_Max) );
+        DBMS_OUTPUT.PUT_LINE( DataCell(cur."23", l_Max) );
+        DBMS_OUTPUT.PUT_LINE('</TR>');
+    END LOOP;
+    
+    
+    DBMS_OUTPUT.PUT_LINE('<TR><TH class="ThHigh"></TH></TR>');
+    
+    DBMS_OUTPUT.PUT_LINE('<TR>');
+    DBMS_OUTPUT.PUT_LINE('<TH>Color Codes</TH>');
+    DBMS_OUTPUT.PUT_LINE('<TD></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb01">10</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb02">20</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb03">30</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb04">40</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb05">50</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb06">60</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb07">70</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb08">80</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb09">90</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGb10">100</TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('<TD CLASS="TdGbOff"></TD>');
+    DBMS_OUTPUT.PUT_LINE('</TR>');    
+    
+    
+DBMS_OUTPUT.PUT_LINE('</TABLE>');
+DBMS_OUTPUT.PUT_LINE('<BR><BR><P>'||l_MyTrackInfo||', '||l_Date||'</P>');
+DBMS_OUTPUT.PUT_LINE('</BODY>');
+DBMS_OUTPUT.PUT_LINE('</HTML>');
+
+
+END;]]></sql>
+	</query>
+</display>
+</displays>
